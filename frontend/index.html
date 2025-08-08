@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock Price Prediction</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 30px;
+    }
+    header, footer {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    select, button {
+      padding: 10px;
+      font-size: 16px;
+      margin-top: 10px;
+      width: 100%;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border: 1px solid #ccc;
+      background-color: #f9f9f9;
+      border-radius: 5px;
+    }
+    canvas {
+      margin-top: 30px;
+    }
+    footer {
+      margin-top: 50px;
+      font-size: 14px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>📈 Stock Price Predictor</h1>
+    <p>Welcome to the Stock Price Predictor! This tool allows you to predict the next stock price of top Indian companies using machine learning models. It uses historical market data to analyze trends and provide future estimates.</p>
+    <p>Select a company below to view its current stock price and prediction, along with a visual graph of its recent performance.</p>
+  </header>
+
+  <label for="company">Select Company:</label>
+  <select id="company">
+    <option value="RELIANCE">RELIANCE</option>
+    <option value="TCS">TCS</option>
+    <option value="INFY">INFY</option>
+    <option value="HDFCBANK">HDFCBANK</option>
+    <option value="ICICIBANK">ICICIBANK</option>
+    <option value="SBIN">SBIN</option>
+    <option value="ADANIPORTS">ADANIPORTS</option>
+    <option value="ITC">ITC</option>
+    <option value="AXISBANK">AXISBANK</option>
+    <option value="BAJFINANCE">BAJFINANCE</option>
+    <option value="WIPRO">WIPRO</option>
+    <option value="HCLTECH">HCLTECH</option>
+    <option value="ONGC">ONGC</option>
+    <option value="NTPC">NTPC</option>
+    <option value="MARUTI">MARUTI</option>
+    <option value="TITAN">TITAN</option>
+    <option value="POWERGRID">POWERGRID</option>
+    <option value="COALINDIA">COALINDIA</option>
+    <option value="ULTRACEMCO">ULTRACEMCO</option>
+    <option value="BHARTIARTL">BHARTIARTL</option>
+  </select>
+
+  <button onclick="predictPrice()">Predict</button>
+
+  <div class="result" id="result"></div>
+  <canvas id="stockChart" width="600" height="300"></canvas>
+
+  <footer>
+    <p><strong>About Us:</strong> We are a team of data scientists and developers building tools that make stock analysis easy and accessible.</p>
+    <p><strong>Contact us:</strong> support@stockpredictor.in</p>
+  </footer>
+
+ <script>
+  let chart = null;
+
+  async function predictPrice() {
+    const company = document.getElementById('company').value;
+    const resultDiv = document.getElementById('result');
+    resultDiv.innerHTML = "Loading...";
+
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/predict/${company}`);
+      if (!response.ok) {
+        const err = await response.json();
+        resultDiv.innerHTML = `<b>Error:</b> ${err.detail || response.statusText}`;
+        return;
+      }
+
+      const data = await response.json();
+      resultDiv.innerHTML = `
+        <strong>Company:</strong> ${data.company}<br>
+        <strong>Actual Price:</strong> ₹${data.actual_price.toFixed(2)}<br>
+        <strong>Predicted Next Price:</strong> ₹${data.predicted_price.toFixed(2)}
+      `;
+
+      // Load CSV data
+      const csvRes = await fetch(`http://127.0.0.1:8000/static/data/${company}.csv`);
+      const csvText = await csvRes.text();
+      const lines = csvText.trim().split('\n').slice(1); // skip header
+      const prices = lines.slice(-60).map(row => parseFloat(row.split(',').slice(-1)[0])); // 'Close'
+
+      // Create labels with one extra for predicted point
+      const labels = prices.map((_, i) => `${i + 1}`);
+      labels.push("Next");
+
+      // Extend actual prices to align with prediction
+      const actualExtended = [...prices, null];
+
+      // Prediction dataset with nulls except at the end
+      const predictedData = Array(prices.length).fill(null);
+      predictedData.push(data.predicted_price);
+
+      // Destroy previous chart if exists
+      if (chart) chart.destroy();
+
+      const ctx = document.getElementById("stockChart").getContext("2d");
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: `${company} Actual Prices`,
+              data: actualExtended,
+              borderColor: 'blue',
+              backgroundColor: 'rgba(0, 123, 255, 0.1)',
+              pointBackgroundColor: 'blue',
+              borderWidth: 2,
+              tension: 0.2
+            },
+            {
+              label: `${company} Predicted Price`,
+              data: predictedData,
+              borderColor: 'red',
+              borderDash: [5, 5],
+              backgroundColor: 'rgba(255, 0, 0, 0.2)',
+              pointBackgroundColor: 'red',
+              pointRadius: 5,
+              pointHoverRadius: 7,
+              borderWidth: 2,
+              tension: 0.2
+            }
+          ]
+        },
+        options: {
+          scales: {
+            y: {
+              beginAtZero: false,
+              suggestedMin: Math.min(...prices, data.predicted_price) - 20,
+              suggestedMax: Math.max(...prices, data.predicted_price) + 20
+            }
+          },
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+
+    } catch (error) {
+      resultDiv.innerHTML = `<b>Error:</b> ${error.message}`;
+    }
+  }
+</script>
+
+
+
+</body>
+</html>
